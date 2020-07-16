@@ -1,0 +1,59 @@
+Modern Container CI/CD Pipeline
+
+Importance of Image Scanning
+	Traditional VM vs container image – where the source came from?
+	Vulnerability propagation in container images
+	Attacker has a certain degree of access to your infrastructure
+	Wide container adoption
+		Driver 1: image reusability
+		Driver 2: easy to deploy (Docker Hub, Quay, Google GCR)
+
+Scope – what Scanners can and can’t do
+
+Gap 1 – Components detection
+	Scanner architecture + source of the gap
+	Traditional component detection is problematic
+	Current trend of image slimming and runtime images
+	Distroless - how does this work?
+	Future 
+		Binary analysis
+		Container-aware package managers (i.e. Distroless)
+		Runtime querying
+		
+Gap 2: Unsupported images
+	Scanner architecture + source of the gap
+	What about Fedora?
+	Unsupported image versions within the repository
+	A word on CentOS
+	No vulns != no vulns
+	Future 
+		Binary analysis
+		Robust feed parsing
+		Feed standardization 
+		Distro standardization
+		
+Gap 3: Vulnerabilities are not easy
+	Scanner architecture + source of the gap
+	Initial results on Debian:10.2 - what is going on?
+	Towards ground zero truth in vulnerabilities
+	Applicability Classes
+		TP – simple cases where vulnerability is clearly applicable
+		FP – vulnerability is clearly not applicable
+		But what if there is something in the middle?
+			Inconclusive (untriaged, environmental etc.)
+			Version Mismatch - different feeds disagree on fixed or affected package versions
+			Disputed by maintainers
+	What to do with inconclusives? The decision is environmental!
+	Future - UBCIS
+
+UBCIS – Ultimate Benchmark for Container Image Scanners
+	Benchmark results for Anchore / Clair / Trivy / Microscanner
+
+Practical Recommendations
+	Before Choosing Scanner
+	After Choosing Scanner
+
+A word on registry-embedded scanning
+
+Questions / Thank you for listening
+
