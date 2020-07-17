@@ -10,7 +10,7 @@ Importance of Image Scanning
 
 Scope – what Scanners can and can’t do
 
-Gap 1 – Components detection
+Gap 1: Components detection
 	Scanner architecture + source of the gap
 	Traditional component detection is problematic
 	Current trend of image slimming and runtime images
