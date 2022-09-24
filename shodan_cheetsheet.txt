@@ -1,5 +1,7 @@
 Mine:
 
+	hostname:megacorpone.com
+	
 	Open	iscsi	devices:
 	port:3260	/x00AuthMethod=None
 	
