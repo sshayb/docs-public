@@ -616,4 +616,10 @@ Questions:
 1. How do you know kube-apiserver ip address from the pod? By dumping env and looking at KUBERNETES_PORT_443_TCP variable - it should hold API server ip:port
 2. Getting "error: You must be logged in to the server (Unauthorized)" for the get pods command
 
-
+============================
+EKS
+============================
+shay@Shay-Laptop:/mnt/c/Users/ShayBerkovich$ echo $TOKEN
+k8s-aws-v1.aHR0cHM6Ly9zdHMudXMtd2VzdC0xLmFtYXpvbmF3cy5jb20vP0FjdGlvbj1HZXRDYWxsZXJJZGVudGl0eSZWZXJzaW9uPTIwMTEtMDYtMTUmWC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BU0lBMkFWWU5FVk1WRElFRFdWSCUyRjIwMjMxMTAxJTJGdXMtd2VzdC0xJTJGc3RzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyMzExMDFUMDk0MjQyWiZYLUFtei1FeHBpcmVzPTYwJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCUzQngtazhzLWF3cy1pZCZYLUFtei1TaWduYXR1cmU9ZjI2OTVjODI3MDNmZmQ3MDg0MDI4MjBiMzEwMzYxNmU1YTI4YTYzM2NjOGY5N2RmY2YwNWQzNTU2ZTAzNTc3MA
+shay@Shay-Laptop:/mnt/c/Users/ShayBerkovich$ curl -Ik -XGET -H "Authorization: Bearer $TOKEN" 'https://ABCDEFG.gr7.region-code.eks.amazonaws.com/api/v1/namespaces'
+curl: (6) Could not resolve host: ABCDEFG.gr7.region-code.eks.amazonaws.com
